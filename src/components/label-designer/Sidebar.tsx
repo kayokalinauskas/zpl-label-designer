@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useLabelStore } from '@/store/useLabelStore';
 import { Button } from '@/components/ui/button';
-import { Type, Square, Barcode, Database, Search } from 'lucide-react';
+import { Type, Square, Barcode, Database, Search, Minus } from 'lucide-react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { Input } from '@/components/ui/input';
 import { LABEL_VARIABLES } from '@/constants/variables';
@@ -38,6 +38,16 @@ export default function Sidebar() {
           className="h-10 w-10 rounded-xl hover:bg-slate-100 hover:text-blue-600 transition-colors"
         >
           <Square className="w-5 h-5" />
+        </Button>
+
+        <Button 
+          variant="ghost" 
+          size="icon" 
+          onClick={() => addElement('line')} 
+          title="Adicionar Linha"
+          className="h-10 w-10 rounded-xl hover:bg-slate-100 hover:text-blue-600 transition-colors"
+        >
+          <Minus className="w-5 h-5" />
         </Button>
         
         <Button 

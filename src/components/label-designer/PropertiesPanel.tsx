@@ -1,15 +1,11 @@
 'use client';
 
-import { useState } from 'react';
 import { useLabelStore } from '@/store/useLabelStore';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { Trash2, Settings, Search } from 'lucide-react';
-import { LABEL_VARIABLES } from '@/constants/variables';
+import { Trash2, Settings } from 'lucide-react';
 
 export default function PropertiesPanel() {
   const { elements, selectedId, updateElement, removeElement } = useLabelStore();
@@ -54,32 +50,36 @@ export default function PropertiesPanel() {
               <Label>X</Label>
               <Input 
                 type="number" 
+                min={0}
                 value={Math.round(selectedElement.x)} 
-                onChange={(e) => handleChange('x', Number(e.target.value))} 
+                onChange={(e) => handleChange('x', Math.max(0, Number(e.target.value)))} 
               />
             </div>
             <div>
               <Label>Y</Label>
               <Input 
-                type="number" 
+                type="number"
+                min={0}
                 value={Math.round(selectedElement.y)} 
-                onChange={(e) => handleChange('y', Number(e.target.value))} 
+                onChange={(e) => handleChange('y', Math.max(0, Number(e.target.value)))} 
               />
             </div>
             <div>
               <Label>Largura</Label>
               <Input 
-                type="number" 
+                type="number"
+                min={1}
                 value={Math.round(selectedElement.width)} 
-                onChange={(e) => handleChange('width', Number(e.target.value))} 
+                onChange={(e) => handleChange('width', Math.max(1, Number(e.target.value)))} 
               />
             </div>
             <div>
               <Label>Altura</Label>
               <Input 
-                type="number" 
+                type="number"
+                min={1}
                 value={Math.round(selectedElement.height)} 
-                onChange={(e) => handleChange('height', Number(e.target.value))} 
+                onChange={(e) => handleChange('height', Math.max(1, Number(e.target.value)))} 
               />
             </div>
           </div>
@@ -93,7 +93,7 @@ export default function PropertiesPanel() {
             <div>
               <Label>Conteúdo</Label>
               <textarea
-                className="flex min-h-[80px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 font-mono text-xs"
+                className="flex min-h-20 w-full rounded-md border border-input bg-transparent px-3 py-2 shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 font-mono text-xs"
                 value={selectedElement.text || ''}
                 onChange={(e) => handleChange('text', e.target.value)}
               />
@@ -102,8 +102,9 @@ export default function PropertiesPanel() {
               <Label>Tamanho da Fonte</Label>
               <Input 
                 type="number"
+                min={1}
                 value={selectedElement.fontSize || 24} 
-                onChange={(e) => handleChange('fontSize', Number(e.target.value))} 
+                onChange={(e) => handleChange('fontSize', Math.max(1, Number(e.target.value)))} 
               />
             </div>
           </div>
@@ -115,8 +116,83 @@ export default function PropertiesPanel() {
               <Label>Espessura da Borda</Label>
               <Input 
                 type="number"
+                min={0}
                 value={selectedElement.strokeWidth || 0} 
-                onChange={(e) => handleChange('strokeWidth', Number(e.target.value))} 
+                onChange={(e) => handleChange('strokeWidth', Math.max(0, Number(e.target.value)))} 
+              />
+            </div>
+          </div>
+        )}
+
+        {selectedElement.type === 'line' && (
+          <div className="space-y-4">
+            <div>
+              <Label>Orientação</Label>
+              <div className="flex gap-2 mt-1">
+                <Button
+                  variant={selectedElement.lineOrientation === 'horizontal' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => {
+                    // Swap width/height when changing orientation
+                    const currentWidth = selectedElement.width;
+                    const currentHeight = selectedElement.height;
+                    handleChange('lineOrientation', 'horizontal');
+                    if (selectedElement.lineOrientation === 'vertical') {
+                      handleChange('width', currentHeight);
+                      handleChange('height', currentWidth);
+                    }
+                  }}
+                >
+                  Horizontal
+                </Button>
+                <Button
+                  variant={selectedElement.lineOrientation === 'vertical' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => {
+                    // Swap width/height when changing orientation
+                    const currentWidth = selectedElement.width;
+                    const currentHeight = selectedElement.height;
+                    handleChange('lineOrientation', 'vertical');
+                    if (selectedElement.lineOrientation === 'horizontal') {
+                      handleChange('width', currentHeight);
+                      handleChange('height', currentWidth);
+                    }
+                  }}
+                >
+                  Vertical
+                </Button>
+              </div>
+            </div>
+            <div>
+              <Label>Comprimento</Label>
+              <Input 
+                type="number"
+                min={1}
+                value={selectedElement.lineOrientation === 'horizontal' ? selectedElement.width : selectedElement.height} 
+                onChange={(e) => {
+                  const value = Math.max(1, Number(e.target.value));
+                  if (selectedElement.lineOrientation === 'horizontal') {
+                    handleChange('width', value);
+                  } else {
+                    handleChange('height', value);
+                  }
+                }} 
+              />
+            </div>
+            <div>
+              <Label>Espessura</Label>
+              <Input 
+                type="number"
+                min={1}
+                value={selectedElement.lineOrientation === 'horizontal' ? selectedElement.height : selectedElement.width} 
+                onChange={(e) => {
+                  const value = Math.max(1, Number(e.target.value));
+                  if (selectedElement.lineOrientation === 'horizontal') {
+                    handleChange('height', value);
+                  } else {
+                    handleChange('width', value);
+                  }
+                }} 
               />
             </div>
           </div>
@@ -151,7 +227,7 @@ export default function PropertiesPanel() {
       <div className="p-4 border-t">
         <Button 
           variant="destructive" 
-          className="w-full"C
+          className="w-full"
           onClick={() => removeElement(selectedElement.id)}
         >
           <Trash2 className="w-4 h-4 mr-2" />

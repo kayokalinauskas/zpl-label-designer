@@ -1,4 +1,4 @@
-export type ElementType = 'text' | 'rect' | 'barcode' | 'variable';
+export type ElementType = 'text' | 'rect' | 'barcode' | 'variable' | 'line';
 
 export interface LabelElement {
   id: string;
@@ -18,6 +18,9 @@ export interface LabelElement {
   fill?: string;
   stroke?: string;
   strokeWidth?: number;
+
+  // Line specific
+  lineOrientation?: 'horizontal' | 'vertical';
 
   // Barcode specific
   barcodeValue?: string; // EAN-13

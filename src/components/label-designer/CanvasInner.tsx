@@ -6,6 +6,7 @@ import Konva from 'konva';
 import bwipjs from 'bwip-js';
 import { useLabelStore } from '@/store/useLabelStore';
 import { mmToDots, LabelElement } from '@/types';
+import { isRectFilled } from '@/lib/zpl-generator';
 import { clsx } from 'clsx';
 
 // --- Sub-components ---
@@ -21,7 +22,8 @@ const RectItem = ({ element, isSelected, onSelect, onChange, stageWidth, stageHe
   const height = element.height;
   const strokeWidth = element.strokeWidth || 1; // Default ZPL thickness is 1 dot
   
-  const isFilled = strokeWidth >= width || strokeWidth >= height || element.fill === 'black';
+  // Use shared helper for consistent filled logic
+  const isFilled = isRectFilled(element);
 
   // Konva renders stroke centered on the path.
   // To simulate "inner stroke":
@@ -106,36 +108,108 @@ const RectItem = ({ element, isSelected, onSelect, onChange, stageWidth, stageHe
   );
 };
 
+const LineItem = ({ element, isSelected, onSelect, onChange, stageWidth, stageHeight }: any) => {
+  const shapeRef = useRef<Konva.Rect>(null);
+
+  // Lines in ZPL are rendered using ^GB with either width=thickness or height=thickness
+  // Horizontal line: width=length, height=thickness
+  // Vertical line: width=thickness, height=length
+  const isHorizontal = element.lineOrientation === 'horizontal';
+  
+  return (
+    <Rect
+      ref={shapeRef}
+      id={element.id}
+      x={element.x}
+      y={element.y}
+      width={element.width}
+      height={element.height}
+      fill={element.stroke || 'black'}
+      draggable
+      onClick={onSelect}
+      onTap={onSelect}
+      dragBoundFunc={(pos) => {
+        return {
+          x: Math.max(0, Math.min(pos.x, stageWidth - element.width)),
+          y: Math.max(0, Math.min(pos.y, stageHeight - element.height)),
+        };
+      }}
+      onDragEnd={(e) => {
+        onChange({ x: e.target.x(), y: e.target.y() });
+      }}
+      onTransformEnd={(e) => {
+        const node = shapeRef.current;
+        if (!node) return;
+        
+        const scaleX = node.scaleX();
+        const scaleY = node.scaleY();
+        
+        const newWidth = Math.max(1, node.width() * scaleX);
+        const newHeight = Math.max(1, node.height() * scaleY);
+        
+        node.scaleX(1);
+        node.scaleY(1);
+
+        onChange({
+          x: node.x(),
+          y: node.y(),
+          width: newWidth,
+          height: newHeight,
+        });
+      }}
+    />
+  );
+};
+
 const TextItem = ({ element, isSelected, onSelect, onChange, stageWidth, stageHeight }: any) => {
   const shapeRef = useRef<Konva.Text>(null);
+  const lastSyncedHeightRef = useRef<number>(element.height);
 
-  // We do NOT extract height to clip. We let Konva Text auto-size height based on content and wrapping width.
-  // ZPL ^A defines char height/width, not bounding box height.
-  // ^FB defines bounding box width for wrapping.
+  // ZPL ^A0N,H,W positions text at the TOP of the character cell.
+  // Canvas/CSS fonts have internal metrics where glyphs don't start at y=0.
+  // 
+  // APPROACH: Render text normally in Konva (no offset tricks).
+  // The Transformer will match the Konva Text bounding box.
+  // We'll compensate in the ZPL generator by adjusting the Y position.
+  //
+  // This keeps the canvas WYSIWYG accurate to what Konva renders,
+  // and the ZPL generator handles the translation to ZPL coordinates.
+  
+  const zplFontHeight = element.fontSize || 24;
+  const konvaFontSize = zplFontHeight;
   
   useEffect(() => {
     const node = shapeRef.current;
     if (node) {
-      // Sync the natural rendered height back to store so we know the bounding box for ZPL positioning/collisions
       const naturalHeight = node.height();
-      if (Math.abs(naturalHeight - element.height) > 1) {
+      if (Math.abs(naturalHeight - lastSyncedHeightRef.current) > 1) {
+        lastSyncedHeightRef.current = naturalHeight;
         onChange({ height: naturalHeight });
       }
     }
-  }, [element.text, element.fontSize, element.width, element.height, onChange]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [element.text, element.fontSize, element.width, onChange]);
 
   return (
     <Text
       ref={shapeRef}
-      {...element}
-      fontFamily="OCR-B, Courier New, monospace" // Approx for ZPL Font 0
-      // Ensure we don't pass a fixed height that might clip content if the store value is stale
-      // We only pass width (for wrapping).
-      height={undefined} 
+      id={element.id}
+      x={element.x}
+      y={element.y}
+      text={element.text}
+      fontSize={konvaFontSize}
+      fill={element.fill || 'black'}
+      width={element.width}
+      fontFamily="Arial, ORC-B, Courier New, Courier, monospace"
+      fontStyle="bold"
+      lineHeight={1.0}
+      align="left"
+      verticalAlign="top"
+      padding={0}
+      height={undefined}
       draggable
       onClick={onSelect}
       onTap={onSelect}
-      fontStyle='Bold'
       dragBoundFunc={(pos) => {
         const node = shapeRef.current;
         if (!node) return pos;
@@ -154,24 +228,18 @@ const TextItem = ({ element, isSelected, onSelect, onChange, stageWidth, stageHe
         const scaleX = node.scaleX();
         const scaleY = node.scaleY();
         
-        // ZPL Logic:
-        // Horizontal scaling -> Changes Wrapping Width (field block width)
         const newWidth = Math.max(5, node.width() * scaleX);
-        
-        // Vertical scaling -> Changes Font Size (ZPL ^A height)
-        const newFontSize = Math.max(5, element.fontSize * scaleY);
+        const newFontSize = Math.max(8, Math.round(element.fontSize * scaleY));
 
         node.scaleX(1);
         node.scaleY(1);
         node.width(newWidth);
-        // Note: We don't set height directly on node, it auto-calculates.
         
         onChange({
             x: node.x(),
             y: node.y(),
             width: newWidth,
             fontSize: newFontSize,
-            // Height will be updated by the useEffect after render
         });
       }}
     />
@@ -180,7 +248,13 @@ const TextItem = ({ element, isSelected, onSelect, onChange, stageWidth, stageHe
 
 const BarcodeItem = ({ element, isSelected, onSelect, onChange, stageWidth, stageHeight, density, fontLoaded }: any) => {
   const [imageCanvas, setImageCanvas] = useState<HTMLCanvasElement | null>(null);
+  const [barcodeError, setBarcodeError] = useState<string | null>(null);
   const shapeRef = useRef<Konva.Image>(null);
+
+  // Validate EAN-13: must be 12 or 13 numeric digits
+  const isValidEAN13 = (value: string): boolean => {
+    return /^\d{12,13}$/.test(value || '');
+  };
 
   // ZPL/EAN-13 Logical vs Visual Constants
   // Logical: 95 modules (bars only).
@@ -192,28 +266,84 @@ const BarcodeItem = ({ element, isSelected, onSelect, onChange, stageWidth, stag
   const offset = leftQZModules * scale;
 
   useEffect(() => {
+    // Validate barcode value first
+    if (!isValidEAN13(element.barcodeValue)) {
+      setBarcodeError('EAN-13 deve ter 12 ou 13 dígitos numéricos');
+      setImageCanvas(null);
+      return;
+    }
+
     const canvas = document.createElement('canvas');
     try {
-      // Calculate height in millimeters that results in exactly 'element.height' pixels
-      // when rendered by bwip-js. 
-      // bwip-js logic approx: pixels = height_mm * (72/25.4) * scale
-      // Therefore: height_mm = (pixels / scale) * (25.4 / 72)
-      const barHeightMm = (element.height / scale) * (25.4 / 72);
+      // ZPL behavior: ^BEN,h,f,g specifies bar height in dots.
+      // When includetext=Y, text is rendered BELOW the bars (bars keep full height).
+      // 
+      // bwip-js behavior: When includetext=true, it REDUCES bar height to ~92.5% 
+      // to fit text within the specified height (bhs values show 0.925).
+      //
+      // To match ZPL: We need to compensate by increasing the height parameter
+      // so that after bwip-js reduces it, the bars end up at element.height.
+      //
+      // Compensation factor: 1 / 0.925 ≈ 1.081 when includetext is true
+      const BAR_HEIGHT_RATIO_WITH_TEXT = 0.925;
+      const compensationFactor = element.showHumanReadable ? (1 / BAR_HEIGHT_RATIO_WITH_TEXT) : 1;
+      
+      // Convert desired bar height (in pixels/dots) to millimeters for bwip-js
+      // bwip-js formula: rendered_pixels = height_mm * (72/25.4) * scale
+      // We want: bar_height_pixels = element.height
+      // With compensation: total_height_mm = (element.height * compensationFactor / scale) * (25.4 / 72)
+      const targetHeightMm = (element.height * compensationFactor / scale) * (25.4 / 72);
       
       // bwip-js renders the full visual barcode (including quiet zones and text)
       bwipjs.toCanvas(canvas, {
         bcid: 'ean13',
         text: element.barcodeValue,
         scale: scale, 
-        height: barHeightMm, 
+        height: targetHeightMm, 
         includetext: element.showHumanReadable,
         // textxalign: 'center', // Removed to enforce standard EAN-13 layout (first digit left)
       });
       setImageCanvas(canvas);
+      setBarcodeError(null);
     } catch (e) {
       console.warn('Barcode render error', e);
+      setBarcodeError('Erro ao renderizar código de barras');
+      setImageCanvas(null);
     }
   }, [element.barcodeValue, element.showHumanReadable, element.height, element.width, density, scale, fontLoaded]);
+
+  // Show error placeholder if barcode is invalid
+  if (barcodeError) {
+    return (
+      <React.Fragment>
+        <Rect
+          x={element.x}
+          y={element.y}
+          width={element.width}
+          height={element.height}
+          fill="#fee2e2"
+          stroke="#ef4444"
+          strokeWidth={2}
+          dash={[5, 5]}
+          draggable
+          onClick={onSelect}
+          onTap={onSelect}
+          onDragEnd={(e) => {
+            onChange({ x: e.target.x(), y: e.target.y() });
+          }}
+        />
+        <Text
+          x={element.x + 5}
+          y={element.y + element.height / 2 - 10}
+          width={element.width - 10}
+          text={barcodeError}
+          fontSize={12}
+          fill="#dc2626"
+          align="center"
+        />
+      </React.Fragment>
+    );
+  }
 
   return (
     <Image
@@ -379,6 +509,7 @@ export default function CanvasInner() {
               };
 
               if (el.type === 'rect') return <RectItem key={el.id} {...elementProps} />;
+              if (el.type === 'line') return <LineItem key={el.id} {...elementProps} />;
               if (el.type === 'text') return <TextItem key={el.id} {...elementProps} />;
               if (el.type === 'variable') return <TextItem key={el.id} {...elementProps} />;
               if (el.type === 'barcode') return <BarcodeItem key={el.id} {...elementProps} />;
@@ -388,6 +519,17 @@ export default function CanvasInner() {
             <Transformer
               ref={trRef}
               rotateEnabled={false}
+              // Critical: Prevent centering behavior during scaling
+              // This ensures scaling happens from the anchor point, not from center
+              centeredScaling={false}
+              // No padding between the transformer border and the actual shape
+              padding={0}
+              // Ensure anchors are at exact corners
+              anchorCornerRadius={0}
+              // Keep ratio only when shift is pressed (optional, can remove if not desired)
+              keepRatio={false}
+              // Enable scaling from all corners and edges
+              enabledAnchors={['top-left', 'top-right', 'bottom-left', 'bottom-right', 'top-center', 'bottom-center', 'middle-left', 'middle-right']}
               boundBoxFunc={(oldBox, newBox) => {
                 // Minimum size
                 const minSize = 5;
