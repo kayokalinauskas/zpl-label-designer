@@ -84,7 +84,7 @@ export default function Header() {
                 Esta ação não pode ser desfeita.
               </DialogDescription>
             </DialogHeader>
-            <DialogFooter className="gap-2 sm:gap-0">
+            <DialogFooter className="gap-2 sm:gap-2">
               <DialogClose asChild>
                 <Button variant="outline">Cancelar</Button>
               </DialogClose>

@@ -20,7 +20,7 @@ export default function RightPanel() {
   const { elements } = useLabelStore();
 
   return (
-    <div className="w-80 border-l border-slate-100 bg-white flex flex-col h-full shadow-[-4px_0_24px_-12px_rgba(0,0,0,0.1)] z-20">
+    <div className="w-100 border-l border-slate-100 bg-white flex flex-col h-full shadow-[-4px_0_24px_-12px_rgba(0,0,0,0.1)] z-20">
       <Tabs defaultValue="properties" className="flex flex-col h-full">
         {/* Tab Headers */}
         <div className="border-b border-slate-100 px-2 pt-2 bg-white/50 backdrop-blur-sm shrink-0">
