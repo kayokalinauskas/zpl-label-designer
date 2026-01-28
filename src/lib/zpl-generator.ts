@@ -1,37 +1,64 @@
+// ============================================================================
+// ZPL Code Generator
+// ============================================================================
+// Converts canvas elements to ZPL (Zebra Programming Language) commands.
+// This is a pure function that takes elements and settings, returning ZPL string.
+//
+// ZPL Reference: https://www.zebra.com/content/dam/zebra_new_ia/en-us/manuals/printers/common/programming/zpl-zbi2-pm-en.pdf
+// ============================================================================
+
 import { LabelElement, LabelSettings } from '@/types';
+import { isRectFilled } from './element-factory';
 
-// Escape special ZPL characters to prevent command injection
-const escapeZPL = (text: string): string => {
+// ----------------------------------------------------------------------------
+// Text Escaping
+// ----------------------------------------------------------------------------
+
+/**
+ * Escape special ZPL characters to prevent command injection.
+ * ZPL uses _XX format for hex escape sequences.
+ * 
+ * @example
+ * escapeZPL('Hello^World') // 'Hello_5EWorld'
+ */
+function escapeZPL(text: string): string {
   if (!text) return '';
-  // Replace ^ with _5E (hex for ^) and ~ with _7E (hex for ~)
-  // ZPL uses _XX format for hex escape sequences
   return text
-    .replace(/_/g, '_5F') // Escape underscore first since it's our escape char
-    .replace(/\^/g, '_5E')
-    .replace(/~/g, '_7E');
-};
+    .replace(/_/g, '_5F')  // Escape underscore first (it's our escape char)
+    .replace(/\^/g, '_5E') // Command prefix
+    .replace(/~/g, '_7E'); // Alternate command prefix
+}
 
-// Helper to check if a rect should be filled (consistent with CanvasInner logic)
-export const isRectFilled = (element: LabelElement): boolean => {
-  const strokeWidth = element.strokeWidth || 1;
-  return strokeWidth >= element.width || strokeWidth >= element.height || element.fill === 'black';
-};
+// ----------------------------------------------------------------------------
+// Font Metrics Compensation
+// ----------------------------------------------------------------------------
 
-// Font metrics compensation for canvas vs ZPL alignment
-// 
-// CSS/Canvas fonts (like Courier New) have internal metrics where:
-// - The em-square includes space for ascenders and descenders
-// - Glyphs don't start at y=0; there's padding above the tallest glyphs
-// 
-// ZPL Font 0 positions text where Y is the TOP of the character cell,
-// and glyphs appear to start immediately at that position.
-//
-// To compensate: We shift the ZPL Y position UP by a percentage of fontSize
-// so that the visual result in Labelary matches the canvas preview.
-//
-// For Courier New Bold: ~12% of fontSize is empty space above cap-height
+/**
+ * CSS/Canvas fonts (like Courier New) have internal metrics where:
+ * - The em-square includes space for ascenders and descenders
+ * - Glyphs don't start at y=0; there's padding above the tallest glyphs
+ * 
+ * ZPL Font 0 positions text where Y is the TOP of the character cell,
+ * and glyphs appear to start immediately at that position.
+ *
+ * To compensate: We shift the ZPL Y position UP by a percentage of fontSize
+ * so that the visual result in Labelary matches the canvas preview.
+ *
+ * For Courier New Bold: ~12% of fontSize is empty space above cap-height
+ */
 const CANVAS_FONT_TOP_PADDING_RATIO = 0.12;
 
+// ----------------------------------------------------------------------------
+// ZPL Generation
+// ----------------------------------------------------------------------------
+
+/**
+ * Generate ZPL code from canvas elements.
+ * 
+ * @param elements - Array of label elements from the canvas
+ * @param settings - Label settings (unused currently but available for ^LL, ^PW etc)
+ * @returns Complete ZPL code string
+ */
 export function generateZPL(elements: LabelElement[], settings: LabelSettings): string {
   const { density } = settings;
   

@@ -1,135 +1,152 @@
+// ============================================================================
+// Label Store
+// ============================================================================
+// Zustand store for managing label designer state.
+// This is the single source of truth for all label data.
+//
+// Architecture Notes:
+// - Element creation delegated to element-factory for consistency
+// - Actions are atomic and explicit for future undo/redo support
+// - State is persisted to localStorage (elements and settings only)
+// ============================================================================
+
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { LabelElement, LabelSettings, ElementType } from '@/types';
+import { LabelElement, LabelSettings, ElementType, ElementUpdate, CreateElementPayload } from '@/types';
+import { createElement } from '@/lib/element-factory';
+
+// ----------------------------------------------------------------------------
+// State Interface
+// ----------------------------------------------------------------------------
 
 interface LabelState {
+  // State
   elements: LabelElement[];
   selectedId: string | null;
   settings: LabelSettings;
   
-  addElement: (type: ElementType, payload?: string) => void;
-  updateElement: (id: string, updates: Partial<LabelElement>) => void;
+  // Element Actions
+  addElement: (type: ElementType, payload?: CreateElementPayload) => void;
+  updateElement: (id: string, updates: ElementUpdate) => void;
   removeElement: (id: string) => void;
-  selectElement: (id: string | null) => void;
-  setSettings: (settings: Partial<LabelSettings>) => void;
   clearAll: () => void;
+  
+  // Selection Actions
+  selectElement: (id: string | null) => void;
+  
+  // Settings Actions
+  setSettings: (settings: Partial<LabelSettings>) => void;
+  
+  // Computed Helpers (for convenience)
+  getSelectedElement: () => LabelElement | undefined;
 }
+
+// ----------------------------------------------------------------------------
+// Default Settings
+// ----------------------------------------------------------------------------
+
+const DEFAULT_SETTINGS: LabelSettings = {
+  width: 110,   // 110mm default label width
+  height: 30,   // 30mm default label height
+  density: 8,   // 8 dpmm (203 dpi) - most common
+};
+
+// ----------------------------------------------------------------------------
+// Store Implementation
+// ----------------------------------------------------------------------------
 
 export const useLabelStore = create<LabelState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
+      // Initial State
       elements: [],
       selectedId: null,
-      settings: {
-        width: 110, // 110mm default
-        height: 30, // 30mm default
-        density: 8, // 8 dpmm (203 dpi) default
-      },
+      settings: DEFAULT_SETTINGS,
 
+      // ---------------------------------------------------------------------
+      // Element Actions
+      // ---------------------------------------------------------------------
+      
+      /**
+       * Add a new element to the canvas.
+       * Element creation is delegated to the factory for consistent defaults.
+       */
       addElement: (type, payload) => set((state) => {
-        const id = crypto.randomUUID();
-        // Center logic could be improved, but 0,0 is fine for now
-        const baseElement = {
-          id,
-          x: 10,
-          y: 10,
-        };
-
-        let newElement: LabelElement;
-
-        const density = state.settings.density;
-
-        switch (type) {
-          case 'text':
-            newElement = {
-              ...baseElement,
-              type: 'text',
-              text: 'New Text',
-              fontSize: 24, // approx 12pt at 203dpi? No, dots.
-              width: 200,
-              height: 30,
-              isBold: true, // approximate
-            };
-            break;
-          case 'variable':
-            newElement = {
-              ...baseElement,
-              type: 'variable',
-              text: payload || '${variable}',
-              fontSize: 24,
-              width: 300,
-              height: 30,
-              fill: '#2563eb', // Make variables blue to distinguish them
-            };
-            break;
-          case 'rect':
-            newElement = {
-              ...baseElement,
-              type: 'rect',
-              width: 100,
-              height: 100,
-              stroke: 'black',
-              strokeWidth: 2, // Border thickness in dots
-            };
-            break;
-          case 'line':
-            newElement = {
-              ...baseElement,
-              type: 'line',
-              width: 100, // Length of the line
-              height: 2,  // Thickness of the line
-              lineOrientation: 'horizontal',
-              stroke: 'black',
-            };
-            break;
-          case 'barcode':
-            const d = state.settings.density;
-            newElement = {
-              ...baseElement,
-              type: 'barcode',
-              barcodeValue: '1234567890128', // Valid 13-digit EAN example
-              // Set width to 190 dots (95 modules * 2 dots/module) to match ^BY2 default
-              width: 190, 
-              height: 100, // Initial height set to 100 dots as requested
-              showHumanReadable: true,
-            };
-            break;
-        }
-
+        const newElement = createElement(type, payload);
+        
         return {
           elements: [...state.elements, newElement],
-          selectedId: id,
+          selectedId: newElement.id, // Auto-select new element
         };
       }),
 
+      /**
+       * Update an existing element's properties.
+       * Only the specified fields are updated (shallow merge).
+       */
       updateElement: (id, updates) => set((state) => ({
         elements: state.elements.map((el) => 
           el.id === id ? { ...el, ...updates } : el
         ),
       })),
 
+      /**
+       * Remove an element from the canvas.
+       * Clears selection if the removed element was selected.
+       */
       removeElement: (id) => set((state) => ({
         elements: state.elements.filter((el) => el.id !== id),
         selectedId: state.selectedId === id ? null : state.selectedId,
       })),
 
-      selectElement: (id) => set({ selectedId: id }),
-
-      setSettings: (newSettings) => set((state) => ({
-        settings: { ...state.settings, ...newSettings }
-      })),
-
+      /**
+       * Clear all elements from the canvas.
+       * Also clears selection.
+       */
       clearAll: () => set({ 
         elements: [], 
         selectedId: null 
       }),
+
+      // ---------------------------------------------------------------------
+      // Selection Actions
+      // ---------------------------------------------------------------------
+      
+      /**
+       * Select an element by ID, or clear selection (null).
+       */
+      selectElement: (id) => set({ selectedId: id }),
+
+      // ---------------------------------------------------------------------
+      // Settings Actions
+      // ---------------------------------------------------------------------
+      
+      /**
+       * Update label settings (partial update supported).
+       */
+      setSettings: (newSettings) => set((state) => ({
+        settings: { ...state.settings, ...newSettings }
+      })),
+
+      // ---------------------------------------------------------------------
+      // Computed Helpers
+      // ---------------------------------------------------------------------
+      
+      /**
+       * Get the currently selected element.
+       * Returns undefined if nothing is selected.
+       */
+      getSelectedElement: () => {
+        const state = get();
+        return state.elements.find(el => el.id === state.selectedId);
+      },
     }),
     {
-      name: 'zpl-label-store', // localStorage key
+      name: 'zpl-label-store',
       partialize: (state) => ({ 
         elements: state.elements, 
         settings: state.settings 
-      }), // Don't persist selectedId
+      }),
     }
   )
 );

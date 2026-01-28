@@ -4,17 +4,27 @@ import { useState } from 'react';
 import { useLabelStore } from '@/store/useLabelStore';
 import { generateZPL } from '@/lib/zpl-generator';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { 
+  Dialog, 
+  DialogContent, 
+  DialogHeader, 
+  DialogTitle, 
+  DialogTrigger,
+  DialogDescription,
+  DialogFooter,
+  DialogClose
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Settings, Download, Copy, FileCode, Check } from 'lucide-react';
+import { Settings, Download, Copy, FileCode, Check, Trash2, AlertTriangle } from 'lucide-react';
 import { PrintDensity } from '@/types';
 
 export default function Header() {
-  const { settings, elements, setSettings } = useLabelStore();
+  const { settings, elements, setSettings, clearAll } = useLabelStore();
   const [zplOutput, setZplOutput] = useState('');
   const [isExportOpen, setIsExportOpen] = useState(false);
+  const [isClearDialogOpen, setIsClearDialogOpen] = useState(false);
   const [hasCopied, setHasCopied] = useState(false);
 
   const handleExport = () => {
@@ -30,6 +40,11 @@ export default function Header() {
     setTimeout(() => setHasCopied(false), 2000);
   };
 
+  const handleClearCanvas = () => {
+    clearAll();
+    setIsClearDialogOpen(false);
+  };
+
   return (
     <header className="h-16 border-b border-slate-100 bg-white/80 backdrop-blur-md px-6 flex items-center justify-between shrink-0 z-30 relative">
       <div className="flex items-center space-x-3">
@@ -43,6 +58,47 @@ export default function Header() {
       </div>
 
       <div className="flex items-center space-x-3">
+        {/* Clear Canvas Button with Confirmation */}
+        <Dialog open={isClearDialogOpen} onOpenChange={setIsClearDialogOpen}>
+          <DialogTrigger asChild>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="h-9 border-red-200 hover:bg-red-50 text-red-600 hover:text-red-700"
+              disabled={elements.length === 0}
+              title="Limpar Canvas"
+            >
+              <Trash2 className="w-4 h-4 mr-2" />
+              Limpar
+            </Button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-red-600">
+                <AlertTriangle className="w-5 h-5" />
+                Limpar Canvas
+              </DialogTitle>
+              <DialogDescription className="pt-2">
+                Esta ação irá remover <strong>todos os {elements.length} elemento{elements.length !== 1 ? 's' : ''}</strong> do canvas.
+                <br />
+                Esta ação não pode ser desfeita.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter className="gap-2 sm:gap-0">
+              <DialogClose asChild>
+                <Button variant="outline">Cancelar</Button>
+              </DialogClose>
+              <Button 
+                variant="destructive" 
+                onClick={handleClearCanvas}
+              >
+                <Trash2 className="w-4 h-4 mr-2" />
+                Sim, limpar tudo
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
         <Dialog>
           <DialogTrigger asChild>
             <Button variant="outline" size="sm" className="h-9 border-slate-200 hover:bg-slate-50 text-slate-700">

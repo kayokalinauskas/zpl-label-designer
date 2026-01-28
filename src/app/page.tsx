@@ -2,6 +2,7 @@ import Canvas from '@/components/label-designer/Canvas';
 import Header from '@/components/label-designer/Header';
 import PropertiesPanel from '@/components/label-designer/PropertiesPanel';
 import Sidebar from '@/components/label-designer/Sidebar';
+import RightPanel from '@/components/label-designer/RightPanel';
 
 export default function Home() {
   return (
@@ -10,7 +11,7 @@ export default function Home() {
       <div className="flex flex-1 overflow-hidden">
         <Sidebar />
         <Canvas />
-        <PropertiesPanel />
+        <RightPanel />
       </div>
     </main>
   );
