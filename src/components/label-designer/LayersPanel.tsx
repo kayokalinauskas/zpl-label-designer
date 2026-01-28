@@ -9,7 +9,7 @@ import {
   Database, 
   Minus,
   Layers,
-  Eye,
+  Trash2,
   GripVertical
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -80,11 +80,16 @@ const getTypeLabel = (type: LabelElement['type']): string => {
 };
 
 export default function LayersPanel() {
-  const { elements, selectedId, selectElement } = useLabelStore();
+  const { elements, selectedId, selectElement, removeElement } = useLabelStore();
   
   // Reverse order so top-most element (last in array) appears first in the list
   // This matches typical layer panel behavior (top layer = top of list)
   const layersInOrder = [...elements].reverse();
+
+  const handleDelete = (e: React.MouseEvent, elementId: string) => {
+    e.stopPropagation(); // Prevent selecting the element when clicking delete
+    removeElement(elementId);
+  };
 
   return (
     <div className="flex flex-col h-full">
@@ -118,11 +123,11 @@ export default function LayersPanel() {
               const zIndex = elements.length - index;
               
               return (
-                <button
+                <div
                   key={element.id}
                   onClick={() => selectElement(element.id)}
                   className={cn(
-                    "w-full flex items-center gap-2 p-2 rounded-lg text-left transition-all",
+                    "w-full flex items-center gap-2 p-2 rounded-lg text-left transition-all cursor-pointer",
                     "hover:bg-slate-100 group",
                     isSelected && "bg-blue-50 hover:bg-blue-100 ring-1 ring-blue-200"
                   )}
@@ -153,11 +158,15 @@ export default function LayersPanel() {
                     </p>
                   </div>
                   
-                  {/* Visibility indicator (always visible for now) */}
-                  <div className="opacity-40">
-                    <Eye className="w-3.5 h-3.5 text-slate-400" />
-                  </div>
-                </button>
+                  {/* Delete button */}
+                  <button
+                    onClick={(e) => handleDelete(e, element.id)}
+                    className="opacity-0 group-hover:opacity-100 p-1.5 rounded-md hover:bg-red-100 transition-all"
+                    title="Excluir elemento"
+                  >
+                    <Trash2 className="w-3.5 h-3.5 text-red-500 hover:text-red-600" />
+                  </button>
+                </div>
               );
             })}
           </div>
